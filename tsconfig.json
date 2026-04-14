@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    /* Lenguaje y Entorno */
+    "target": "ES2022",                                  /* Versión de JS a la que se compilará */
+    "lib": ["ES2022"],                                   /* Bibliotecas disponibles en el entorno */
+    "module": "NodeNext",                                /* Sistema de módulos moderno */
+    "moduleResolution": "NodeNext",                      /* Resolución de módulos para Node.js */
+    
+    /* Soporte para Sequelize y Clases */
+    "experimentalDecorators": true,                   /* Necesario si decides usar sequelize-typescript */
+    "emitDecoratorMetadata": true,                    /* Necesario para metadatos de clases */
+
+    /* Estrechez y Calidad de Código */
+    "strict": true,                                      /* Habilita todas las comprobaciones estrictas */
+    "noImplicitAny": true,                               /* Evita el uso accidental de 'any' */
+    "strictPropertyInitialization": false,               /* Útil para modelos de Sequelize donde los campos se inicializan mediante .init() */
+    "skipLibCheck": true,                                /* Acelera la compilación saltando chequeos de tipos de librerías */
+    
+    /* Salida y Rutas */
+    "outDir": "./dist",                                  /* Carpeta donde se guardará el código compilado */
+    "rootDir": "./",                                     /* Directorio raíz del código fuente */
+    
+    /* Interoperabilidad */
+    "esModuleInterop": true,                             /* Permite importar módulos CommonJS como ES Modules */
+    "forceConsistentCasingInFileNames": true,            /* Vital para evitar errores entre Windows y Linux/macOS */
+    "resolveJsonModule": true                            /* Permite importar archivos .json directamente */
+  },
+  "include": ["**/*.ts", ".env"],                        /* Archivos a incluir en la compilación */
+  "exclude": ["node_modules", "dist"]                    /* Carpetas a ignorar */
+}
