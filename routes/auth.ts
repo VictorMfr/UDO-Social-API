@@ -93,9 +93,9 @@ router.post('/login', async (req: Request, res: Response) => {
   // 4. Enviar el token en una cookie HttpOnly
   res.cookie('auth_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     maxAge: 24 * 60 * 60 * 1000, // 1 día
-    sameSite: 'lax'
+    sameSite: 'none'
   });
 
   return res.json({ 
