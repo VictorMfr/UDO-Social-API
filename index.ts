@@ -16,16 +16,15 @@ import messageRoutes from './routes/message';
 import authRoutes from './routes/auth';
 import errorHandler from './middlewares/error';
 import cookieParser from 'cookie-parser';
-import multer from 'multer';
 
 // Configuración de variables de entorno
 dotenv.config();
 
 const app: Application = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 // --- Middlewares Globales ---
-app.use(cors({ credentials: true, origin: '*' })); // Permite peticiones desde tu frontend Next.js
+app.use(cors({ credentials: true, origin: process.env.FRONTEND_CLIENT_URL || '*' })); // Permite peticiones desde tu frontend Next.js
 app.use(express.json()); // Habilita el parseo de JSON en el body
 app.use(cookieParser());
 
@@ -37,7 +36,7 @@ app.use('/api/comments', authenticateToken, commentRoutes, errorHandler);
 app.use('/api/messages', authenticateToken, messageRoutes, errorHandler);
 
 // Ruta de salud del sistema (Health Check)
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
   res.json({ status: 'OK', uptime: process.uptime() });
 });
 
@@ -47,14 +46,17 @@ const startServer = async () => {
     // 1. Conectar a MySQL
     await connectDB();
 
-    // 2. Levantar Express
-    app.listen(PORT, () => {
-      console.log(`
+    // Ejecucion en local
+    if (require.main === module) {
+      // 2. Levantar Express
+      app.listen(PORT, () => {
+        console.log(`
       🚀 Servidor de la Red Social Universitario listo.
       📡 Puerto: ${PORT}
       🔗 URL: http://localhost:${PORT}/api
       `);
-    });
+      });
+    }
   } catch (error) {
     console.error('💥 Error fatal al iniciar el servidor:', error);
     process.exit(1);
@@ -62,3 +64,5 @@ const startServer = async () => {
 };
 
 startServer();
+
+export default app;
