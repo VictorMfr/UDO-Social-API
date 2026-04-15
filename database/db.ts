@@ -16,6 +16,7 @@ const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
   dialect: 'postgres',
   port: dbPort,
   logging: false, // Cambia a console.log si quieres ver el SQL en consola
+  dialectModule: require('pg'),
   define: {
     // Estas opciones aplican a todos los modelos globalmente
     underscored: true,
