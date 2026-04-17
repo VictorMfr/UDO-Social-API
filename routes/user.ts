@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { User } from '../database/models/user';
+import { AuthRequest } from '../middlewares/auth';
+import ServerError from '../classes/ServerError';
 
 const router = Router();
 
@@ -9,15 +11,26 @@ router.get('/', async (req, res) => {
   res.json(users);
 });
 
-// Leer uno
+// Leer perfil propio
+router.get('/me', async (req: AuthRequest, res) => {
+  const user = await User.findByPk(req.user!.id);
+
+  if (!user) {
+    throw new ServerError(404, 'Usuario no encontrado');
+  }
+
+  res.json(user);
+})
+
+// Leer un usuario en particular
 router.get('/:id', async (req, res) => {
   const user = await User.findByPk(req.params.id);
   user ? res.json(user) : res.status(404).json({ error: 'No encontrado' });
 });
 
 // Actualizar
-router.put('/:id', async (req, res) => {
-  const user = await User.findByPk(req.params.id);
+router.put('/me', async (req: AuthRequest, res) => {
+  const user = await User.findByPk(req.user!.id);
   if (user) {
     await user.update(req.body);
     res.json(user);

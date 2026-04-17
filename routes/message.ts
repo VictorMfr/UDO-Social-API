@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { Message } from '../database/models/message';
-import { Op } from 'sequelize';
+import { col, fn, literal, Op } from 'sequelize';
 import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 import { checkIfRequestHasBody } from '../utils/validation/request';
+import { User } from '../database/associations';
 
 const router = Router();
 
@@ -52,9 +53,54 @@ router.get('/', async (req: AuthRequest, res) => {
         { sender_id: req.query.dest, receiver_id: req.user!.id }
       ]
     },
+    include: [
+      { model: User, as: 'sender', attributes: ['username', 'id'] },
+      { model: User, as: 'receiver', attributes: ['username', 'id'] }
+    ],
     order: [['created_at', 'ASC']]
   });
   res.json(messages);
+});
+
+// Obtener conversaciones
+router.get('/inbox', async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+
+    // Obtener mensajes
+    const messages = await Message.findAll({
+      where: {
+        [Op.or]: [{ sender_id: userId }, { receiver_id: userId }]
+      },
+      attributes: [
+        // Usamos una función de agregación para obtener el último mensaje
+        [fn('MAX', col('created_at')), 'lastMessageDate'],
+      ],
+      
+      include: [
+        {
+          model: User,
+          as: 'sender', // Asegúrate de tener estas asociaciones en tu modelo Message
+          attributes: ['id', 'username']
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'username']
+        }
+      ]
+    });
+
+    res.send(messages)
+
+
+
+
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Error al obtener el buzón" });
+  }
 });
 
 // Marcar como leído
