@@ -3,7 +3,8 @@ import { Comment } from '../database/models/comment';
 import { checkIfRequestHasBody } from '../utils/validation/request';
 import ServerError from '../classes/ServerError';
 import { AuthRequest } from '../middlewares/auth';
-import { Post } from '../database/associations';
+import { Post, User } from '../database/associations';
+import { col } from 'sequelize';
 
 const router = Router();
 
@@ -53,9 +54,23 @@ router.get('/', async (req, res) => {
   }
 
   const comments = await Comment.findAll({
+    attributes: [
+      'id',
+      [col('username'), 'username'],
+      'content',
+      'created_at',
+      'deleted_at', // La fecha en cuestion
+      'updated_at'
+    ],
+    include: [{
+      model: User,
+      as: 'author',
+      attributes: []
+    }],
     where: {
       post_id: parseFloat(req.query.post as string)
-    }
+    },
+    raw: true
   });
 
   res.json(comments);

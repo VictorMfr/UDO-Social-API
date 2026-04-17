@@ -7,6 +7,9 @@ import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 import { upload } from '../config/multer';
 import { createClient } from "@supabase/supabase-js";
+import { User } from '../database/associations';
+import { Fn } from 'sequelize/lib/utils';
+import { col } from 'sequelize';
 
 const router = Router();
 
@@ -85,11 +88,47 @@ router.post('/', upload.single('image'), async (req: AuthRequest, res: Response)
 
 
 
-// Obtener todos los posts
+/* 
+  OBTENER TODOS LOS POSTS
+  - Nombre del autor
+  - Fecha de post
+  - Contenido
+  - Posible imagen
+*/
 router.get('/', async (req, res) => {
-  const posts = await Post.findAll({ order: [['created_at', 'DESC']] });
+
+  
+  const posts = await Post.findAll({
+    attributes: [
+      [col('username'), 'username'],
+      'id',
+      'created_at',
+      'content',
+      'media_url'
+    ],
+    include: [{
+      model: User,
+      as: 'author',
+      attributes: []
+    }],
+    order: [['created_at', 'DESC']],
+    raw: true
+  });
+
   res.json(posts);
 });
+
+
+
+
+
+
+
+
+
+
+
+
 
 // Obtener un post por ID
 router.get('/:id', async (req, res) => {
