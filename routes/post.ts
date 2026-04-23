@@ -1,14 +1,11 @@
-import { Router, Request, Response } from 'express';
-import { Post } from '../database/models/post';
+import { Router, Response } from 'express';
 import { checkIfRequestHasBody } from '../utils/validation/request';
 import { checkCreatePostFields } from '../utils/validation/post';
-import { ICreatePostRequestBody } from '../types/routes/post';
 import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 import { upload } from '../config/multer';
 import { createClient } from "@supabase/supabase-js";
-import { User } from '../database/associations';
-import { Fn } from 'sequelize/lib/utils';
+import { User, Post } from '../database/associations';
 import { col } from 'sequelize';
 
 const router = Router();
@@ -17,16 +14,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_ANON_KEY!
 );
-
-
-
-
-
-
-
-
-
-
 
 
 // Crear post

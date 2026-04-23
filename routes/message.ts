@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { Message } from '../database/models/message';
-import { col, fn, literal, Op } from 'sequelize';
+import { col, fn, Op } from 'sequelize';
 import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 import { checkIfRequestHasBody } from '../utils/validation/request';
-import { User } from '../database/associations';
+import { User, Message } from '../database/associations';
+import { io } from '..';
 
 const router = Router();
 
@@ -14,7 +14,7 @@ router.post('/', async (req: AuthRequest, res) => {
   checkIfRequestHasBody(req);
 
   // Evitar que los mensajes sean vacios
-  if (!req.body.message || !req.body.receiver_id || !req.body.sender_id) {
+  if (!req.body.message || !req.body.conversation_id || !req.body.sender_id) {
     throw new ServerError(400, 'Mensaje no valido para enviar');
   }
 
@@ -24,84 +24,76 @@ router.post('/', async (req: AuthRequest, res) => {
   }
 
   const msg = await Message.create({
+    conversation_id: req.body.conversation_id,
     message: req.body.message,
-    receiver_id: req.body.receiver_id,
     sender_id: req.user!.id
+  });
+
+  // 2. Emitir el mensaje por Socket.io a la sala correspondiente
+  io.to(`chat_${req.body.conversation_id}`).emit("receive_message", {
+    id: msg.id,
+    dest: 'other', // Luego en el front validamos si soy yo o no
+    content: msg.message,
+    date: (msg as any).created_at,
+    sender_id: msg.sender_id // Envía esto para saber quién lo mandó
   });
 
   res.status(201).json(msg);
 });
 
+
+
+
+
+
+
 // Listar chat entre dos usuarios (Conversación privada)
 router.get('/', async (req: AuthRequest, res) => {
 
   // Verificar que tenga el query de dest
-  if (!req.query.dest) {
+  if (!req.query.idConv) {
     throw new ServerError(400, 'No se ha especificado destinatario');
   }
 
   // Evitar querys extraños
-  if (typeof req.query.dest !== 'string') {
+  if (typeof req.query.idConv !== 'string') {
     throw new ServerError(400, 'Query no valido')
   }
 
-  // Asegurarse de que el usuario receptor exista
+  // Listar todos los mensajes con la id de conversacion dada
   const messages = await Message.findAll({
-    where: {
-      [Op.or]: [
-        { sender_id: req.user!.id, receiver_id: req.query!.dest },
-        { sender_id: req.query.dest, receiver_id: req.user!.id }
-      ]
-    },
-    include: [
-      { model: User, as: 'sender', attributes: ['username', 'id'] },
-      { model: User, as: 'receiver', attributes: ['username', 'id'] }
+    where: { conversation_id: req.query.idConv },
+    attributes: [
+      'id',
+      'message',
+      [col('sender.id'), 'sender_id'],
+      [col('sender.username'), 'sender_username'],
+      'is_read',
+      'updated_at'
     ],
+    include: [
+      { model: User, as: 'sender', attributes: [] },
+    ],
+    raw: true,
     order: [['created_at', 'ASC']]
   });
+
+  
   res.json(messages);
 });
 
-// Obtener conversaciones
-router.get('/inbox', async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user!.id;
-
-    // Obtener mensajes
-    const messages = await Message.findAll({
-      where: {
-        [Op.or]: [{ sender_id: userId }, { receiver_id: userId }]
-      },
-      attributes: [
-        // Usamos una función de agregación para obtener el último mensaje
-        [fn('MAX', col('created_at')), 'lastMessageDate'],
-      ],
-      
-      include: [
-        {
-          model: User,
-          as: 'sender', // Asegúrate de tener estas asociaciones en tu modelo Message
-          attributes: ['id', 'username']
-        },
-        {
-          model: User,
-          as: 'receiver',
-          attributes: ['id', 'username']
-        }
-      ]
-    });
-
-    res.send(messages)
 
 
 
 
 
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Error al obtener el buzón" });
-  }
-});
+
+
+
+
+
+
+
 
 // Marcar como leído
 router.put('/read/:id', async (req: AuthRequest, res) => {
@@ -120,7 +112,7 @@ router.put('/read/:id', async (req: AuthRequest, res) => {
   // El unico que puede marcar como leido un mensaje es el receptor
   // Asi que se debe verficar que el usuario con la sesion sea el mismo
   // receptor
-  if (req.user!.id !== message.receiver_id) {
+  if (req.user!.id !== message.sender_id) {
     throw new ServerError(403, 'No autorizado');
   }
 

@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { Comment } from '../database/models/comment';
 import { checkIfRequestHasBody } from '../utils/validation/request';
 import ServerError from '../classes/ServerError';
 import { AuthRequest } from '../middlewares/auth';
-import { Post, User } from '../database/associations';
+import { Post, User, Comment } from '../database/associations';
 import { col } from 'sequelize';
 
 const router = Router();

@@ -14,8 +14,8 @@ export class Message extends Model<InferAttributes<Message>, InferCreationAttrib
   declare id: CreationOptional<number>;
   
   // Claves foráneas tipadas explícitamente
+  declare conversation_id: ForeignKey<number>;
   declare sender_id: ForeignKey<number>;
-  declare receiver_id: ForeignKey<number>;
   
   declare message: string;
   
@@ -29,13 +29,13 @@ Message.init({
     autoIncrement: true, 
     primaryKey: true 
   },
+  conversation_id: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
   sender_id: { 
     type: DataTypes.INTEGER, 
     allowNull: false,
-  },
-  receiver_id: { 
-    type: DataTypes.INTEGER, 
-    allowNull: false ,
   },
   message: { 
     type: DataTypes.STRING(500), 

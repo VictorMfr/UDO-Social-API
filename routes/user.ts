@@ -1,14 +1,42 @@
 import { Router } from 'express';
-import { User } from '../database/models/user';
+import { User } from '../database/associations';
 import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 
 const router = Router();
 
-// Listar todos
-router.get('/', async (req, res) => {
-  const users = await User.findAll();
-  res.json(users);
+import { Op } from 'sequelize';
+
+// Listar todos o buscar por username
+router.get('/', async (req: AuthRequest, res) => {
+  
+    const { q } = req.query; // Capturamos el término de búsqueda ?q=...
+    const myId = req.user!.id; // Obtenemos tu ID del middleware de auth
+
+    let whereClause: {
+      id: { [Op.ne]: number };
+      username?: { [Op.iLike]: string };
+    } = {
+      // Regla de oro: Nunca mostrar al propio usuario en la lista de búsqueda
+      id: { [Op.ne]: myId }
+    };
+
+    // Si viene un término de búsqueda, agregamos el filtro de username
+    if (q) {
+      whereClause.username = {
+        [Op.iLike]: `%${q}%` // Busca cualquier coincidencia parcial
+      };
+    }
+
+    const users = await User.findAll({
+      where: whereClause,
+      attributes: ['id', 'username'], // Solo envía lo necesario
+      limit: q ? 10 : 20, // Limitamos para no saturar si hay muchos usuarios
+      order: [['username', 'ASC']]
+    });
+
+    res.json(users);
+
 });
 
 // Leer perfil propio
@@ -20,7 +48,7 @@ router.get('/me', async (req: AuthRequest, res) => {
   }
 
   res.json(user);
-})
+});
 
 // Leer un usuario en particular
 router.get('/:id', async (req, res) => {
