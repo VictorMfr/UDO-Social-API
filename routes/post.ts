@@ -88,6 +88,7 @@ router.get('/', async (req, res) => {
   const posts = await Post.findAll({
     attributes: [
       [col('username'), 'username'],
+      [col('avatar'), 'avatar'],
       'id',
       'created_at',
       'content',

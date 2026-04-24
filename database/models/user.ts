@@ -12,6 +12,7 @@ export class User extends Model<InferAttributes<User>, InferCreationAttributes<U
   declare email: string;
   declare password_hash: string;
   declare bio: CreationOptional<string>;
+  declare avatar: CreationOptional<string>;
 }
 
 // Inicialización en Sequelize
@@ -34,6 +35,10 @@ User.init({
   password_hash: {
     type: DataTypes.STRING(255),
     allowNull: false
+  },
+  avatar: {
+    type: DataTypes.STRING(),
+    allowNull: true,
   },
   bio: {
     type: DataTypes.STRING(500),
