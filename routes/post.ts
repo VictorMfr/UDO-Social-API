@@ -83,10 +83,17 @@ router.post('/', upload.single('image'), async (req: AuthRequest, res: Response)
   - Posible imagen
 */
 router.get('/', async (req, res) => {
+  const { userId } = req.query;
+  const where: any = {};
 
-  
+  if (typeof userId === 'string' && !isNaN(Number(userId))) {
+    where.user_id = Number(userId);
+  }
+
   const posts = await Post.findAll({
+    where,
     attributes: [
+      [col('user_id'), 'user_id'],
       [col('username'), 'username'],
       [col('avatar'), 'avatar'],
       'id',
