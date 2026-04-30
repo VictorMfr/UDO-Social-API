@@ -1,118 +1,112 @@
 import { Router, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
-import { Conversation, Message, User } from "../database/associations";
-import { col, literal, Op } from "sequelize";
+import { Conversation, Message, Participant, User } from "../database/associations";
+import { Op } from "sequelize";
 import { checkIfRequestHasBody } from "../utils/validation/request";
 import ServerError from "../classes/ServerError";
-import { io } from "..";
 
 const router = Router();
 
-// Crear una conversación entre dos usuarios
-router.post("/", async (req: AuthRequest, res: Response) => {
 
-    // Verificar si existe el body
-    checkIfRequestHasBody(req);
 
-    // Verificar si existe un destinatario
-    if (!req.body.receiver_id) {
-        throw new ServerError(400, "No se ha especificado el destinatario de la conversación");
+router.get('/', async (req: AuthRequest, res) => {
+    try {
+        const inbox = await Conversation.findAll({
+            attributes: ['id', 'type', 'last_message_id', 'updated_at'],
+            include: [
+                {
+                    model: Participant,
+                    as: 'self_participation',
+                    where: { user_id: req.user!.id },
+                    attributes: ['last_read_message_id'],
+                    required: true 
+                },
+                {
+                    model: Message,
+                    as: 'lastMessage',
+                    attributes: ['content']
+                },
+                {
+                    model: Participant,
+                    as: 'other_participants',
+                    // FILTRO CRÍTICO: Traer a todos los que NO sean el usuario actual
+                    where: { 
+                        user_id: { [Op.ne]: req.user!.id } 
+                    },
+                    required: false,
+                    attributes: ['user_id'],
+                    include: [{
+                        model: User,
+                        as: 'user',
+                        attributes: ['id', 'username', 'avatar']
+                    }]
+                }
+            ],
+            order: [['updated_at', 'DESC']]
+        });
+
+
+        return res.status(200).json(inbox);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).send("Error en el servidor");
     }
-
-    // Verificar que el mensaje tenga un contenido
-    if (!req.body.message) {
-        throw new ServerError(400, "No se ha especificado un mensaje para iniciar la conversación");
-    }
-
-    // Evitar que se inicie un chat con uno mismo
-    if (req.user!.id === req.body.receiver_id) {
-        return res.status(400).json({ message: "No puedes iniciar un chat contigo mismo" });
-    }
-
-    // Buscar si ya existe una conversacion entre estos dos usuarios (en cualquier orden)
-    const conversation = await Conversation.findOne({
-        where: {
-            [Op.or]: [
-                { user_one: req.user!.id, user_two: req.body.receiver_id },
-                { user_one: req.body.receiver_id, user_two: req.user!.id }
-            ]
-        }
-    });
-
-    if (conversation) {
-        throw new ServerError(400, "Ya existe una conversación entre estos usuarios");
-    }
-
-    // Buscar si el destinatario existe
-    const receiver = await User.findByPk(req.body.receiver_id);
-    if (!receiver) {
-        throw new ServerError(404, "El destinatario de la conversación no existe");
-    }
-
-    // Crear la conversacion
-    const createdConversation = await Conversation.create({
-        user_one: req.user!.id,
-        user_two: req.body.receiver_id
-    });
-
-    // Lo logico es que se envie un mensaje inicial 
-    // inmediatamente despues de que se crea la conversacion
-    const message = await Message.create({
-        conversation_id: createdConversation.id,
-        sender_id: req.user!.id,
-        message: req.body.message
-    });
-
-    // Emitir el mensaje por Socket.io a la sala correspondiente
-    io.to(`chat_${createdConversation.id}`).emit("receive_message", {
-        id: message.id,
-        dest: 'other', // Luego en el front validamos si soy yo o no
-        content: message.message,
-        date: (message as any).created_at,
-        sender_id: message.sender_id // Envía esto para saber quién lo mandó
-    });
-
-    res.status(201).json(message);
 });
 
+// Ruta donde se pretende establecer comunicacion con un grupo o una persona
+router.post('/', async (req: AuthRequest, res) => {
 
+    // Verificar que haya un cuerpo
+    checkIfRequestHasBody(req);
 
+    // Campos esperados
+    const {
+        receiver_user_id,
+        initial_message
+    } = req.body;
 
+    // Si falta receiver_user_id
+    if (!receiver_user_id || typeof receiver_user_id != 'number') {
+        throw new ServerError(400, "No se ha especificado un destino valido")
+    }
 
-
-
-
-
-
-// Obtener conversaciones
-router.get("/", async (req: AuthRequest, res: Response) => {
-    const myId = req.user!.id;
-
-    // Obtener las conversaciones del usuario, ordenadas por fecha de actualización (último mensaje)
-    const conversations = await Conversation.findAll({
-        attributes: [
-            'id',
-            [col('starter.username'), 'starter_username'],
-            [col('receiver.username'), 'receiver_username'],
-            [literal(`(SELECT message FROM messages WHERE messages.conversation_id = "${Conversation.name}".id ORDER BY created_at DESC LIMIT 1)`), 'last_message'],
-            [literal(`(SELECT sender_id FROM messages WHERE messages.conversation_id = "Conversation".id ORDER BY created_at DESC LIMIT 1)`),'last_message_sender_id']
-        ],
-        where: {
-            [Op.or]: [
-                { user_one: myId },
-                { user_two: myId }
-            ]
-        },
-        include: [
-            { model: User, as: 'starter', attributes: [] },
-            { model: User, as: 'receiver', attributes: [] }
-        ],
-        order: [['updated_at', 'DESC']],
-        raw: true
+    // Crear conversacion
+    const newConversation = await Conversation.create({
+        type: "PRIVATE"
     });
 
-    res.json(conversations);
+    // Crear un mensaje asociado a la conversacion de origen igual al usuario autentificado
+    const newMessage = await Message.create({
+        conversation_id: newConversation.id,
+        content: initial_message,
+        user_id: req.user!.id
+    });
 
+    // Crear los participantes en la conversacion (el origen)
+    await Participant.create({
+        conversation_id: newConversation.id,
+        user_id: req.user!.id,
+        last_read_message_id: newMessage.id
+    });
+
+    // El participante destino
+    await Participant.create({
+        user_id: receiver_user_id,
+        conversation_id: newConversation.id
+    });
+
+    // Agregar ultimo mensaje enviado
+    newConversation.set({ last_message_id: newMessage.id });
+    await newConversation.save();
+
+    // Construccion de la respuesta
+    const response = {
+        id: newMessage.id,
+        conversationId: newConversation.id,
+        date: (newMessage as any).created_at
+    }
+
+    res.send(response);
 });
 
 export default router;

@@ -18,11 +18,12 @@ import authRoutes from './routes/auth';
 import errorHandler from './middlewares/error';
 import cookieParser from 'cookie-parser';
 import conversationRoutes from './routes/conversation';
+import participantRoutes from './routes/participant';
 
 // Funcionalidad de socket.io para conexiones abiertas (Chat en tiempo real)
 import { createServer } from 'node:http';
 import { Server } from 'socket.io';
-import { serverSocketsInitialize } from './sockets/sockets';
+import { serverSocketsInitialize } from './sockets';
 
 // Configuración de variables de entorno
 dotenv.config();
@@ -78,6 +79,7 @@ app.use('/api/posts', authenticateToken, postRoutes, errorHandler);
 app.use('/api/comments', authenticateToken, commentRoutes, errorHandler);
 app.use('/api/messages', authenticateToken, messageRoutes, errorHandler);
 app.use('/api/conversations', authenticateToken, conversationRoutes, errorHandler);
+app.use('/api/participants', authenticateToken, participantRoutes, errorHandler);
 
 // Ruta de salud del sistema (Health Check)
 app.get('/', (req, res) => {

@@ -40,7 +40,7 @@ router.get('/', async (req: AuthRequest, res) => {
 
   const users = await User.findAll({
     where: whereClause,
-    attributes: ['id', 'username'], // Solo envía lo necesario
+    attributes: ['id', 'username', 'avatar'], // Solo envía lo necesario
     limit: q ? 10 : 20, // Limitamos para no saturar si hay muchos usuarios
     order: [['username', 'ASC']]
   });

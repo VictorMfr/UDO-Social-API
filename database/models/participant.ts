@@ -5,42 +5,45 @@ import {
     InferCreationAttributes,
     CreationOptional,
     ForeignKey,
-    INTEGER,
-    EnumDataType
 } from "sequelize";
 import db from "../db";
 
 // Definición del modelo Conversation con tipado estricto e inferencia de atributos
-export class Conversation extends Model<InferAttributes<Conversation>, InferCreationAttributes<Conversation>> {
+export class Participant extends Model<InferAttributes<Participant>, InferCreationAttributes<Participant>> {
     // Atributos generados automáticamente por la base de datos
     declare id: CreationOptional<number>;
 
     // Claves foráneas tipadas explícitamente
-    declare type: 'GROUP' | 'PRIVATE';
-    declare last_message_id: CreationOptional<ForeignKey<number>>;
+    declare user_id: ForeignKey<number>;
+    declare conversation_id: ForeignKey<number>;
+    declare last_read_message_id: CreationOptional<ForeignKey<number>>;
 }
 
-Conversation.init({
+Participant.init({
     id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
         primaryKey: true
     },
-    type: {
-        type: DataTypes.ENUM('GROUP', 'PRIVATE'),
+    user_id: {
+        type: DataTypes.INTEGER,
         allowNull: false
     },
-    last_message_id: {
+    conversation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    last_read_message_id: {
         type: DataTypes.INTEGER,
         allowNull: true
     }
 }, {
     sequelize: db,
-    tableName: 'conversations',
+    tableName: 'participants',
     underscored: true,
     timestamps: true,
     paranoid: true, // Habilita el borrado lógico (Soft Delete)
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    deletedAt: 'deleted_at'
+    deletedAt: 'deleted_at',
 });

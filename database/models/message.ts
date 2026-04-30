@@ -15,12 +15,8 @@ export class Message extends Model<InferAttributes<Message>, InferCreationAttrib
   
   // Claves foráneas tipadas explícitamente
   declare conversation_id: ForeignKey<number>;
-  declare sender_id: ForeignKey<number>;
-  
-  declare message: string;
-  
-  // El tipo BOOLEAN es el estándar correcto para PostgreSQL en Supabase
-  declare is_read: CreationOptional<boolean>;
+  declare user_id: ForeignKey<number>;
+  declare content: string;
 }
 
 Message.init({
@@ -33,17 +29,13 @@ Message.init({
     type: DataTypes.INTEGER,
     allowNull: false
   },
-  sender_id: { 
-    type: DataTypes.INTEGER, 
-    allowNull: false,
-  },
-  message: { 
+  content: { 
     type: DataTypes.STRING(500), 
     allowNull: false 
   },
-  is_read: { 
-    type: DataTypes.BOOLEAN, 
-    defaultValue: false 
+  user_id: { 
+    type: DataTypes.INTEGER, 
+    allowNull: false 
   }
 }, { 
   sequelize: db, 

@@ -3,126 +3,98 @@ import { col, fn, Op } from 'sequelize';
 import { AuthRequest } from '../middlewares/auth';
 import ServerError from '../classes/ServerError';
 import { checkIfRequestHasBody } from '../utils/validation/request';
-import { User, Message } from '../database/associations';
+import { User, Message, Conversation, Participant } from '../database/associations';
 import { io } from '..';
 
 const router = Router();
 
-// Enviar mensaje
 router.post('/', async (req: AuthRequest, res) => {
-  // Verificar que exita un cuerpo
-  checkIfRequestHasBody(req);
+    // Primero comprobar que la peticion tenga cuerpo
+    checkIfRequestHasBody(req);
+    
+    // Campos esperados
+    const { content, conversation_id } = req.body;
 
-  // Evitar que los mensajes sean vacios
-  if (!req.body.message || !req.body.conversation_id || !req.body.sender_id) {
-    throw new ServerError(400, 'Mensaje no valido para enviar');
-  }
+    const message = await Message.create({
+        content,
+        conversation_id,
+        user_id: req.user!.id
+    });
 
-  // Evitar que se tenga un origen distinto al usuario con sesion iniciada
-  if (req.body.sender_id !== req.user?.id) {
-    throw new ServerError(403, 'No autorizado');
-  }
+    // Error 3: Actualizar el last_message_id de la conversación
+    const conversation = await Conversation.findByPk(conversation_id);
+    if (conversation) {
+        conversation.last_message_id = message.id;
+        await conversation.save();
+    }
 
-  const msg = await Message.create({
-    conversation_id: req.body.conversation_id,
-    message: req.body.message,
-    sender_id: req.user!.id
-  });
+    // Error 2: Notificar a los participantes via socket
+    const participants = await Participant.findAll({
+        where: { conversation_id },
+        attributes: ['user_id'],
+        raw: true
+    });
 
-  // 2. Emitir el mensaje por Socket.io a la sala correspondiente
-  io.to(`chat_${req.body.conversation_id}`).emit("receive_message", {
-    id: msg.id,
-    dest: 'other', // Luego en el front validamos si soy yo o no
-    content: msg.message,
-    date: (msg as any).created_at,
-    sender_id: msg.sender_id // Envía esto para saber quién lo mandó
-  });
+    participants.forEach(p => {
+        if (p.user_id !== req.user!.id) {
+            io.to(`user_${p.user_id}`).emit('new_message', {
+                conversationId: conversation_id,
+                message: {
+                    id: message.id,
+                    content: message.content,
+                    date: (message as any).created_at,
+                    origin: 'other',
+                    sender: {
+                        id: req.user!.id,
+                        username: req.user!.username,
+                        avatar: (req.user as any).avatar
+                    }
+                }
+            });
+        }
+    });
 
-  res.status(201).json(msg);
+    const response = {
+        id: message.id,
+        date: (message as any).created_at
+    }
+
+    res.send(response);
 });
 
+router.get('/', async (req: AuthRequest, res, next) => {
+    try {
+        // Obtener el ID de la conversación desde el query
+        const { idConv } = req.query;
 
+        if (!idConv || isNaN(parseInt(idConv as string))) {
+            throw new ServerError(400, 'Se requiere el parámetro idConv');
+        }
 
+        // Obtener los mensajes de la conversación
+        const messages = await Message.findAll({
+            where: { conversation_id: parseInt(idConv as string) },
+            order: [['created_at', 'ASC']],
+            include: [{
+                model: User,
+                as: 'sender',
+                attributes: ['id', 'username', 'avatar']
+            }]
+        });
 
+        // Transformar los mensajes para incluir el origin
+        const messagesWithOrigin = messages.map(msg => ({
+            id: (msg as any).id,
+            content: msg.content,
+            date: (msg as any).created_at,
+            origin: (msg as any).sender?.id === req.user?.id ? 'self' : 'other',
+            sender: (msg as any).sender
+        }));
 
-
-
-// Listar chat entre dos usuarios (Conversación privada)
-router.get('/', async (req: AuthRequest, res) => {
-
-  // Verificar que tenga el query de dest
-  if (!req.query.idConv) {
-    throw new ServerError(400, 'No se ha especificado destinatario');
-  }
-
-  // Evitar querys extraños
-  if (typeof req.query.idConv !== 'string') {
-    throw new ServerError(400, 'Query no valido')
-  }
-
-  // Listar todos los mensajes con la id de conversacion dada
-  const messages = await Message.findAll({
-    where: { conversation_id: req.query.idConv },
-    attributes: [
-      'id',
-      'message',
-      [col('sender.id'), 'sender_id'],
-      [col('sender.username'), 'sender_username'],
-      'is_read',
-      'updated_at'
-    ],
-    include: [
-      { model: User, as: 'sender', attributes: [] },
-    ],
-    raw: true,
-    order: [['created_at', 'ASC']]
-  });
-
-  
-  res.json(messages);
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Marcar como leído
-router.put('/read/:id', async (req: AuthRequest, res) => {
-
-  // Asegurarse de que el usuario haya introducido un params valido
-  if (!req.params.id || isNaN(parseInt(req.params.id as string))) {
-    throw new ServerError(400, 'Parametros no validos');
-  }
-
-  // Buscar el mensaje
-  const message = await Message.findByPk(req.params.id as string);
-  if (!message) {
-    throw new ServerError(404, 'Mensaje no encontrado');
-  }
-
-  // El unico que puede marcar como leido un mensaje es el receptor
-  // Asi que se debe verficar que el usuario con la sesion sea el mismo
-  // receptor
-  if (req.user!.id !== message.sender_id) {
-    throw new ServerError(403, 'No autorizado');
-  }
-
-  message.set({
-    is_read: true
-  });
-
-  await message.save();
-
-  res.json({ success: true });
+        res.send(messagesWithOrigin);
+    } catch (error) {
+        next(error);
+    }
 });
 
 export default router;
