@@ -1,53 +1,41 @@
 import { Router } from "express";
 import { AuthRequest } from "../middlewares/auth";
-import { Conversation, Message, Participant, User } from "../database/associations";
-import { Op } from "sequelize";
+import { Conversation, Participant } from "../database/associations";
+import { checkIfRequestHasBody } from "../utils/validation/request";
+import ServerError from "../classes/ServerError";
 
 const router = Router();
 
-router.get('/', async (req: AuthRequest, res) => {
-    const inbox = await Conversation.findAll({
-        attributes: [
-            'id',
-            'type',
-            'name',
-            'avatar',
-            'last_message_id',
-            'updated_at'
-        ],
-        include: [
-            {
-                model: Participant,
-                as: 'participants',
-                where: { user_id: req.user!.id },
-                attributes: ['last_read_message_id']
-            },
-            {
-                model: Participant,
-                as: 'all_participants',
-                attributes: ['user_id'],
-                where: { user_id: { [Op.ne]: req.user!.id } },
-                required: false,
-                include: [{
-                    model: User,
-                    as: 'user',
-                    attributes: ['username', 'avatar']
-                }]
-            },
-            {
-                model: Message,
-                as: 'lastMessage',
-                attributes: ['content']
-            }
-        ],
-        order: [['updated_at', 'DESC']],
-        raw: true,
-        nest: true
+// Ruta para marcar como leido un mensaje
+router.post('/', async (req: AuthRequest, res) => {
+    
+    // Comprobar si la peticion tiene cuerpo
+    checkIfRequestHasBody(req);
+
+    // Se espera que se tenga una id de conversacion 
+    const { conv_id } = req.body;
+
+    if (!conv_id || isNaN(parseInt(conv_id))) {
+        throw new ServerError(404, 'No se ha proveido de una id valida de conversacion');
+    }
+
+    // Obtener el ultimo id de mensaje de la conversacion
+    const conversation = await Conversation.findByPk(conv_id);
+
+    if (!conversation) {
+        throw new ServerError(404, "Conversacion no encontrada");
+    }
+
+    const lastMessageId = conversation.last_message_id;
+
+    // Usar esta id para actualizar en el participante
+    await Participant.update({
+        last_read_message_id: lastMessageId
+    }, {
+        where: { user_id: req.user!.id }
     });
 
-    
-
-    return res.status(200).json(inbox);
+    res.send();
 });
 
 export default router;
